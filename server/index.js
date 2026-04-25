@@ -21,7 +21,7 @@ const io = new Server(httpServer, {
   cors: {
     origin: process.env.CLIENT_URL || 'http://localhost:5173',
     methods: ['GET', 'POST'],
-  },
+app.use(cors({ origin: '*' }));
 });
 
 // Attach io to app so controllers can emit events
@@ -29,7 +29,9 @@ app.set('io', io);
 
 // Middleware
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
+
+app.use(cors({ origin: true, credentials: true }));
+
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://linktrack-server-production.up.railway.app/api',
+baseURL: 'https://linktrack-server-production-5e35.up.railway.app/api',
   headers: { 'Content-Type': 'application/json' },
 });
 
