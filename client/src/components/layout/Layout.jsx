@@ -1,6 +1,7 @@
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { Link2, LayoutDashboard, Image, LogOut, LogIn } from 'lucide-react';
+import logo from '../../assets/linktracklogo.jpeg';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -16,10 +17,13 @@ export default function Layout() {
       {/* Navbar */}
       <nav className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 font-bold text-white">
-            <Link2 size={18} className="text-brand-400" />
-            LinkTrack
-          </Link>
+          <Link to="/" className="flex items-center">
+  <img
+    src={logo}
+    alt="LinkTrack"
+    className="h-8 w-auto object-contain"
+  />
+</Link>
 
           <div className="flex items-center gap-1">
             {user ? (
