@@ -21,7 +21,7 @@ export default function Layout() {
   <img
     src={logo}
     alt="LinkTrack"
-    className="h-8 w-auto object-contain"
+    className="h-12 w-auto object-contain"
   />
 </Link>
 
