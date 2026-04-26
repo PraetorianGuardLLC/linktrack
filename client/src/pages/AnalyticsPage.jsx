@@ -8,7 +8,7 @@ import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { io } from 'socket.io-client';
 import { analyticsApi } from '../api/links';
-import { ArrowLeft, Globe, Monitor, Wifi, Zap } from 'lucide-react';
+import { ArrowLeft, Globe, Monitor, Wifi, Zap, Download } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -22,12 +22,42 @@ const FlagEmoji = ({ code }) => (
   </span>
 );
 
+const exportCSV = (clicks, shortCode) => {
+  const headers = ['IP','City','Country','Country Code','ISP','Browser','Browser Version','OS','OS Version','Device','Latitude','Longitude','Referrer','Timestamp'];
+  const rows = clicks.map((c) => [
+    c.ip || '',
+    c.geo?.city || '',
+    c.geo?.country || '',
+    c.geo?.countryCode || '',
+    c.geo?.isp || '',
+    c.browser?.name || '',
+    c.browser?.version || '',
+    c.os?.name || '',
+    c.os?.version || '',
+    c.device?.type || '',
+    c.geo?.lat || '',
+    c.geo?.lon || '',
+    c.referer || '',
+    new Date(c.createdAt).toISOString(),
+  ]);
+  const csv = [headers, ...rows]
+    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    .join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `linktrack-${shortCode}-clicks.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast.success('CSV exported!');
+};
+
 export default function AnalyticsPage() {
   const { code } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [liveClicks, setLiveClicks] = useState([]);
   const socketRef = useRef(null);
 
   useEffect(() => {
@@ -41,33 +71,25 @@ export default function AnalyticsPage() {
     socketRef.current = socket;
     socket.emit('join-link', code);
     socket.on('new-click', (click) => {
-      setLiveClicks((prev) => [click, ...prev].slice(0, 5));
       toast.custom((t) => (
         <div className={`bg-slate-800 border border-green-500/30 rounded-xl px-4 py-3 text-sm text-white flex items-center gap-3 ${t.visible ? 'animate-enter' : 'animate-leave'}`}>
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <div>
-            <b>{click.city || click.country}</b> · {click.browser} on {click.os}
-          </div>
+          <div><b>{click.city || click.country}</b> · {click.browser} on {click.os}</div>
         </div>
       ), { duration: 4000 });
     });
-
     return () => socket.disconnect();
   }, [code]);
 
-  if (loading) {
-    return <div className="flex h-64 items-center justify-center text-slate-500">Loading analytics…</div>;
-  }
-
+  if (loading) return <div className="flex h-64 items-center justify-center text-slate-500">Loading analytics…</div>;
   if (!data) return null;
+
   const { link, summary, charts, recentClicks } = data;
 
-  // Build map points from recentClicks that have lat/lon
-const mapPoints = recentClicks
-  .filter((c) => c.geo?.lat && c.geo?.lon)
-  .map((c) => ({
-    lat: c.geo.lat,
-    lon: c.geo.lon,
+  const mapPoints = recentClicks
+    .filter((c) => c.geo?.lat && c.geo?.lon)
+    .map((c) => ({
+      lat: c.geo.lat, lon: c.geo.lon,
       city: c.geo?.city || c.geo?.country || 'Unknown',
       country: c.geo?.country || '',
       ip: c.ip,
@@ -86,9 +108,18 @@ const mapPoints = recentClicks
           <h1 className="text-xl font-bold text-white">{link.title || code}</h1>
           <p className="text-sm text-slate-500 truncate max-w-xs">{link.targetUrl}</p>
         </div>
-        <div className="ml-auto flex items-center gap-2 text-green-400 text-sm">
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          Live tracking
+        <div className="ml-auto flex items-center gap-3">
+          <button
+            onClick={() => exportCSV(recentClicks, code)}
+            disabled={recentClicks.length === 0}
+            className="flex items-center gap-1.5 text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-lg transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download size={14} /> Export CSV
+          </button>
+          <div className="flex items-center gap-2 text-green-400 text-sm">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            Live tracking
+          </div>
         </div>
       </div>
 
@@ -112,7 +143,6 @@ const mapPoints = recentClicks
 
       {/* Charts row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {/* Clicks over time */}
         <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
           <h3 className="text-sm font-medium text-slate-300 mb-3">Clicks over time (30 days)</h3>
           <ResponsiveContainer width="100%" height={160}>
@@ -125,17 +155,12 @@ const mapPoints = recentClicks
               </defs>
               <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
-              <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-                labelStyle={{ color: '#94a3b8', fontSize: 11 }}
-                itemStyle={{ color: '#fff' }}
-              />
+              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} labelStyle={{ color: '#94a3b8', fontSize: 11 }} itemStyle={{ color: '#fff' }} />
               <Area type="monotone" dataKey="count" stroke="#4f6ef7" fill="url(#grad)" strokeWidth={2} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Countries */}
         <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
           <h3 className="text-sm font-medium text-slate-300 mb-3">Top countries</h3>
           <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -145,10 +170,7 @@ const mapPoints = recentClicks
                 <span className="flex-1 text-slate-300 truncate">{c.country}</span>
                 <span className="text-slate-500 text-xs">{c.count}</span>
                 <div className="w-16 bg-slate-700 rounded-full h-1.5">
-                  <div
-                    className="bg-brand-500 rounded-full h-1.5"
-                    style={{ width: `${(c.count / charts.byCountry[0].count) * 100}%` }}
-                  />
+                  <div className="bg-brand-500 rounded-full h-1.5" style={{ width: `${(c.count / charts.byCountry[0].count) * 100}%` }} />
                 </div>
               </div>
             ))}
@@ -167,30 +189,11 @@ const mapPoints = recentClicks
         </div>
         <div style={{ height: '320px' }}>
           {mapPoints.length > 0 ? (
-            <MapContainer
-              center={[20, 0]}
-              zoom={2}
-              style={{ height: '100%', width: '100%', background: '#0f172a' }}
-              scrollWheelZoom={false}
-              attributionControl={false}
-            >
-              <TileLayer
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-              />
+            <MapContainer center={[20, 0]} zoom={2} style={{ height: '100%', width: '100%', background: '#0f172a' }} scrollWheelZoom={false} attributionControl={false}>
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
               {mapPoints.map((point, i) => (
-                <CircleMarker
-                  key={i}
-                  center={[point.lat, point.lon]}
-                  radius={7}
-                  pathOptions={{
-                    color: '#4f6ef7',
-                    fillColor: '#4f6ef7',
-                    fillOpacity: 0.8,
-                    weight: 2,
-                  }}
-                >
-                  <Popup className="dark-popup">
+                <CircleMarker key={i} center={[point.lat, point.lon]} radius={7} pathOptions={{ color: '#4f6ef7', fillColor: '#4f6ef7', fillOpacity: 0.8, weight: 2 }}>
+                  <Popup>
                     <div style={{ background: '#1e293b', color: '#fff', padding: '8px 10px', borderRadius: 8, fontSize: 12, minWidth: 140 }}>
                       <div style={{ fontWeight: 700, marginBottom: 4 }}>{point.city}{point.country ? `, ${point.country}` : ''}</div>
                       <div style={{ color: '#94a3b8' }}>IP: {point.ip}</div>
@@ -221,14 +224,9 @@ const mapPoints = recentClicks
               <BarChart data={chartData} layout="vertical">
                 <XAxis type="number" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={80} />
-                <Tooltip
-                  contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-                  itemStyle={{ color: '#fff', fontSize: 11 }}
-                />
+                <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} itemStyle={{ color: '#fff', fontSize: 11 }} />
                 <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                  {chartData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
+                  {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -238,8 +236,9 @@ const mapPoints = recentClicks
 
       {/* Recent clicks table */}
       <div className="bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-700">
+        <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
           <h3 className="text-sm font-medium text-slate-300">Recent clicks</h3>
+          <span className="text-xs text-slate-600">{recentClicks.length} records</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -274,9 +273,7 @@ const mapPoints = recentClicks
                 </tr>
               ))}
               {recentClicks.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-600">No clicks yet</td>
-                </tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-600">No clicks yet</td></tr>
               )}
             </tbody>
           </table>

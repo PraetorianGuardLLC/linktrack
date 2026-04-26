@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Link2, Zap, Shield, Globe, Eye } from 'lucide-react';
+import { Link2, Zap, Shield, Globe, Eye, Shuffle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { linksApi } from '../api/links';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +9,7 @@ export default function HomePage() {
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [consent, setConsent] = useState(false);
+  const [customCode, setCustomCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const { user } = useAuth();
@@ -18,9 +19,20 @@ export default function HomePage() {
     e.preventDefault();
     if (!url.trim()) return;
 
+    // Validate custom code format
+    if (customCode && !/^[a-zA-Z0-9_-]{3,20}$/.test(customCode)) {
+      toast.error('Custom code: 3–20 chars, letters/numbers/- only');
+      return;
+    }
+
     setLoading(true);
     try {
-      const link = await linksApi.create({ targetUrl: url.trim(), title, consentRequired: consent });
+      const link = await linksApi.create({
+        targetUrl: url.trim(),
+        title,
+        consentRequired: consent,
+        customCode: customCode.trim() || undefined,
+      });
       setResult(link);
       toast.success('Tracking link created!');
     } catch (err) {
@@ -68,6 +80,7 @@ export default function HomePage() {
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
+
               <div>
                 <label className="block text-sm text-slate-400 mb-1.5">Label (optional)</label>
                 <input
@@ -78,6 +91,41 @@ export default function HomePage() {
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>
+
+              {/* Custom short code */}
+              <div>
+                <label className="block text-sm text-slate-400 mb-1.5">
+                  Custom short code{' '}
+                  <span className="text-slate-600">(optional)</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500 text-sm whitespace-nowrap">
+                    {window.location.hostname}/
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="my-link"
+                    value={customCode}
+                    onChange={(e) => setCustomCode(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
+                    maxLength={20}
+                    className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-500 font-mono"
+                  />
+                  {customCode && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomCode('')}
+                      className="text-slate-500 hover:text-slate-300 transition px-2"
+                      title="Clear — use random code"
+                    >
+                      <Shuffle size={16} />
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 mt-1">
+                  Letters, numbers, hyphens only · 3–20 chars · Leave blank for random
+                </p>
+              </div>
+
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -87,6 +135,7 @@ export default function HomePage() {
                 />
                 <span className="text-sm text-slate-400">Show consent page before redirect (GDPR-friendly)</span>
               </label>
+
               <button
                 type="submit"
                 disabled={loading}
@@ -95,6 +144,7 @@ export default function HomePage() {
                 <Link2 size={18} />
                 {loading ? 'Creating…' : 'Create Tracking Link'}
               </button>
+
               {!user && (
                 <p className="text-xs text-slate-500 text-center">
                   <a href="/register" className="text-brand-400 hover:underline">Sign up</a> to save links and view analytics
@@ -113,8 +163,9 @@ export default function HomePage() {
                   Copy
                 </button>
               </div>
-              <div className="text-sm text-slate-400">
+              <div className="text-sm text-slate-400 space-y-1">
                 <div>Target: <span className="text-slate-300">{result.targetUrl}</span></div>
+                <div>Short code: <span className="font-mono text-brand-400">{result.shortCode}</span></div>
               </div>
               <div className="flex gap-3">
                 {user ? (
@@ -126,7 +177,7 @@ export default function HomePage() {
                   </button>
                 ) : null}
                 <button
-                  onClick={() => { setResult(null); setUrl(''); setTitle(''); }}
+                  onClick={() => { setResult(null); setUrl(''); setTitle(''); setCustomCode(''); }}
                   className="flex-1 bg-slate-700 text-slate-300 py-2 rounded-xl hover:bg-slate-600 transition"
                 >
                   Create Another
