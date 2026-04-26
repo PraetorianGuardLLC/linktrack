@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, ResponsiveContainer,
+  AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import { io } from 'socket.io-client';
 import { analyticsApi } from '../api/links';
 import { ArrowLeft, Globe, Monitor, Wifi, Zap } from 'lucide-react';
@@ -34,8 +36,8 @@ export default function AnalyticsPage() {
       .catch(() => toast.error('Failed to load analytics'))
       .finally(() => setLoading(false));
 
-    // Connect WebSocket for real-time updates
-    const socket = io('http://localhost:5000');
+    const BACKEND = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    const socket = io(BACKEND);
     socketRef.current = socket;
     socket.emit('join-link', code);
     socket.on('new-click', (click) => {
@@ -59,6 +61,19 @@ export default function AnalyticsPage() {
 
   if (!data) return null;
   const { link, summary, charts, recentClicks } = data;
+
+  // Build map points from recentClicks that have lat/lon
+  const mapPoints = recentClicks
+    .filter((c) => c.geo?.ll?.length === 2)
+    .map((c) => ({
+      lat: c.geo.ll[0],
+      lon: c.geo.ll[1],
+      city: c.geo?.city || c.geo?.country || 'Unknown',
+      country: c.geo?.country || '',
+      ip: c.ip,
+      browser: c.browser?.name || '–',
+      os: c.os?.name || '–',
+    }));
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -138,6 +153,58 @@ export default function AnalyticsPage() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* WORLD MAP */}
+      <div className="bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden mb-6">
+        <div className="px-4 py-3 border-b border-slate-700">
+          <h3 className="text-sm font-medium text-slate-300 flex items-center gap-2">
+            <Globe size={14} className="text-brand-400" />
+            Click locations
+            <span className="ml-2 text-xs text-slate-500">{mapPoints.length} plotted</span>
+          </h3>
+        </div>
+        <div style={{ height: '320px' }}>
+          {mapPoints.length > 0 ? (
+            <MapContainer
+              center={[20, 0]}
+              zoom={2}
+              style={{ height: '100%', width: '100%', background: '#0f172a' }}
+              scrollWheelZoom={false}
+              attributionControl={false}
+            >
+              <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+              />
+              {mapPoints.map((point, i) => (
+                <CircleMarker
+                  key={i}
+                  center={[point.lat, point.lon]}
+                  radius={7}
+                  pathOptions={{
+                    color: '#4f6ef7',
+                    fillColor: '#4f6ef7',
+                    fillOpacity: 0.8,
+                    weight: 2,
+                  }}
+                >
+                  <Popup className="dark-popup">
+                    <div style={{ background: '#1e293b', color: '#fff', padding: '8px 10px', borderRadius: 8, fontSize: 12, minWidth: 140 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>{point.city}{point.country ? `, ${point.country}` : ''}</div>
+                      <div style={{ color: '#94a3b8' }}>IP: {point.ip}</div>
+                      <div style={{ color: '#94a3b8' }}>{point.browser} · {point.os}</div>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
+            </MapContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center text-slate-600 text-sm">
+              No location data yet — clicks with geo coordinates will appear here
+            </div>
+          )}
         </div>
       </div>
 
