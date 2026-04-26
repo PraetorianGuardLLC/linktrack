@@ -63,11 +63,11 @@ export default function AnalyticsPage() {
   const { link, summary, charts, recentClicks } = data;
 
   // Build map points from recentClicks that have lat/lon
-  const mapPoints = recentClicks
-    .filter((c) => c.geo?.ll?.length === 2)
-    .map((c) => ({
-      lat: c.geo.ll[0],
-      lon: c.geo.ll[1],
+const mapPoints = recentClicks
+  .filter((c) => c.geo?.lat && c.geo?.lon)
+  .map((c) => ({
+    lat: c.geo.lat,
+    lon: c.geo.lon,
       city: c.geo?.city || c.geo?.country || 'Unknown',
       country: c.geo?.country || '',
       ip: c.ip,
